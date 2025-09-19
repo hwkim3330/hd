@@ -90,8 +90,13 @@ function initializeEditor() {
             'Ctrl-O': loadFile,
             'Ctrl-B': () => formatText('**', '**'),
             'Ctrl-I': () => formatText('*', '*'),
+            'Ctrl-U': () => formatText('~~', '~~'),
             'Ctrl-K': insertLink,
-            'Ctrl-P': () => window.print()
+            'Ctrl-P': () => window.print(),
+            'Ctrl-`': insertInlineCode,
+            'Ctrl-Shift-K': insertCode,
+            'Ctrl-Shift-F': insertFootnote,
+            'Ctrl-Shift-D': insertDetails
         }
     });
 
@@ -126,6 +131,15 @@ function setupEventListeners() {
 
     // 키보드 단축키
     document.addEventListener('keydown', function(e) {
+        // ESC 키로 모달 닫기
+        if (e.key === 'Escape') {
+            const tableDialog = document.getElementById('tableDialog');
+            if (tableDialog.style.display === 'flex') {
+                closeTableDialog();
+                return;
+            }
+        }
+
         if (e.ctrlKey || e.metaKey) {
             switch(e.key) {
                 case 's':
@@ -136,7 +150,42 @@ function setupEventListeners() {
                     e.preventDefault();
                     loadFile();
                     break;
+                case 'p':
+                    e.preventDefault();
+                    window.print();
+                    break;
+                case '1':
+                    e.preventDefault();
+                    insertText('# ');
+                    break;
+                case '2':
+                    e.preventDefault();
+                    insertText('## ');
+                    break;
+                case '3':
+                    e.preventDefault();
+                    insertText('### ');
+                    break;
+                case 'e':
+                    e.preventDefault();
+                    insertCode();
+                    break;
+                case 'q':
+                    e.preventDefault();
+                    insertQuote();
+                    break;
+                case 't':
+                    e.preventDefault();
+                    showTableDialog();
+                    break;
             }
+        }
+    });
+
+    // 모달 배경 클릭으로 닫기
+    document.getElementById('tableDialog').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeTableDialog();
         }
     });
 }
@@ -172,6 +221,49 @@ function formatText(before, after) {
     editor.focus();
 }
 
+// 인라인 코드 삽입
+function insertInlineCode() {
+    const selection = editor.getSelection();
+    if (selection) {
+        editor.replaceSelection('`' + selection + '`');
+    } else {
+        const cursor = editor.getCursor();
+        editor.replaceRange('`코드`', cursor);
+    }
+    editor.focus();
+}
+
+// 체크박스 삽입
+function insertCheckbox() {
+    const cursor = editor.getCursor();
+    editor.replaceRange('\n- [ ] 체크리스트 항목', cursor);
+    editor.focus();
+}
+
+// 각주 삽입
+function insertFootnote() {
+    const cursor = editor.getCursor();
+    const footnoteNum = Math.floor(Math.random() * 1000);
+    const footnoteText = `각주 텍스트[^${footnoteNum}]\n\n[^${footnoteNum}]: 각주 내용을 여기에 입력하세요.`;
+    editor.replaceRange(footnoteText, cursor);
+    editor.focus();
+}
+
+// 접기/펼치기 섹션 삽입
+function insertDetails() {
+    const detailsText = `
+<details>
+<summary>클릭하여 펼치기/접기</summary>
+
+숨겨진 내용을 여기에 입력하세요.
+
+</details>
+`;
+    const cursor = editor.getCursor();
+    editor.replaceRange(detailsText, cursor);
+    editor.focus();
+}
+
 // 텍스트 삽입
 function insertText(text) {
     const cursor = editor.getCursor();
@@ -194,16 +286,123 @@ function insertLink() {
     editor.focus();
 }
 
-// 표 삽입
-function insertTable() {
-    const tableText = `
-| 제목1 | 제목2 | 제목3 |
-|-------|-------|-------|
-| 내용1 | 내용2 | 내용3 |
-| 내용4 | 내용5 | 내용6 |
-`;
+// 이미지 삽입
+function insertImage() {
+    const selection = editor.getSelection();
+    const text = selection || '이미지 설명';
+    const imageText = `![${text}](이미지-URL)`;
+
+    if (selection) {
+        editor.replaceSelection(imageText);
+    } else {
+        const cursor = editor.getCursor();
+        editor.replaceRange(imageText, cursor);
+    }
+    editor.focus();
+}
+
+// 인용 삽입
+function insertQuote() {
+    const quoteText = '\n> 인용문을 입력하세요\n';
+    const cursor = editor.getCursor();
+    editor.replaceRange(quoteText, cursor);
+    editor.focus();
+}
+
+// 구분선 삽입
+function insertHorizontalRule() {
+    const ruleText = '\n---\n';
+    const cursor = editor.getCursor();
+    editor.replaceRange(ruleText, cursor);
+    editor.focus();
+}
+
+// 표 다이얼로그 표시
+function showTableDialog() {
+    document.getElementById('tableDialog').style.display = 'flex';
+    updateTablePreview();
+
+    // 이벤트 리스너 추가
+    document.getElementById('tableRows').addEventListener('input', updateTablePreview);
+    document.getElementById('tableCols').addEventListener('input', updateTablePreview);
+}
+
+// 표 다이얼로그 닫기
+function closeTableDialog() {
+    document.getElementById('tableDialog').style.display = 'none';
+}
+
+// 표 미리보기 업데이트
+function updateTablePreview() {
+    const rows = parseInt(document.getElementById('tableRows').value) || 3;
+    const cols = parseInt(document.getElementById('tableCols').value) || 3;
+    const hasHeader = document.getElementById('tableHeader').checked;
+    const grid = document.getElementById('tablePreviewGrid');
+
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.innerHTML = '';
+
+    for (let i = 0; i < rows * cols; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'preview-cell';
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+
+        // 헤더 행 스타일링
+        if (hasHeader && row === 0) {
+            cell.style.background = 'var(--accent)';
+            cell.style.opacity = '0.6';
+            cell.style.fontWeight = 'bold';
+            cell.textContent = `제목${col + 1}`;
+        } else {
+            cell.style.background = 'var(--bg-secondary)';
+            cell.textContent = `${row}행${col + 1}열`;
+        }
+
+        grid.appendChild(cell);
+    }
+}
+
+// 다이얼로그에서 표 삽입
+function insertTableFromDialog() {
+    const rows = parseInt(document.getElementById('tableRows').value) || 3;
+    const cols = parseInt(document.getElementById('tableCols').value) || 3;
+    const align = document.getElementById('tableAlign').value;
+    const hasHeader = document.getElementById('tableHeader').checked;
+
+    // 정렬 문자 생성
+    let alignChar = '---';
+    if (align === 'center') {
+        alignChar = ':---:';
+    } else if (align === 'right') {
+        alignChar = '---:';
+    }
+
+    // 헤더 행
+    const headerCells = Array(cols).fill(0).map((_, i) => `제목${i + 1}`);
+    const headerRow = `| ${headerCells.join(' | ')} |`;
+
+    // 구분 행
+    const separatorRow = `|${Array(cols).fill(alignChar).join('|')}|`;
+
+    // 데이터 행
+    const dataRows = [];
+    const startRow = hasHeader ? 1 : 0;
+    for (let i = startRow; i < rows; i++) {
+        const cells = Array(cols).fill(0).map((_, j) => `내용${i + 1}-${j + 1}`);
+        dataRows.push(`| ${cells.join(' | ')} |`);
+    }
+
+    // 표 텍스트 구성
+    let tableText = '\n';
+    if (hasHeader) {
+        tableText += headerRow + '\n' + separatorRow + '\n';
+    }
+    tableText += dataRows.join('\n') + '\n';
+
     const cursor = editor.getCursor();
     editor.replaceRange(tableText, cursor);
+    closeTableDialog();
     editor.focus();
 }
 
